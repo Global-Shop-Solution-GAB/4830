@@ -1,0 +1,83 @@
+Program.Sub.ScreenSU.Start
+Gui.frmParts..Create
+Gui.frmParts..Caption("Creating Parts")
+Gui.frmParts..Size(7605,1530)
+Gui.frmParts..MinX(0)
+Gui.frmParts..MinY(0)
+Gui.frmParts..Position(0,0)
+Gui.frmParts..BackColor(-2147483633)
+Gui.frmParts..MousePointer(0)
+Gui.frmParts..Event(UnLoad,frmParts_UnLoad)
+Gui.frmParts.lblStatus.Create(Label,"",True,6870,255,0,195,345,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+Program.Sub.frmParts_UnLoad.Start
+Program.Sub.frmParts_UnLoad.End
+
+
+
+Program.Sub.Main.Start
+'Hook numbers 10710, 10980
+'If quote populate hook
+f.Intrinsic.Control.if(v.Caller.Hook,=,"10710")
+	v.Passed.000203.Set("Create Parts")
+f.Intrinsic.Control.Else
+	v.Local.lret.Declare(long)
+	f.Intrinsic.UI.Msgbox("Are you sure you want to create part numbers for this quote?","Part Number Creation",4,v.Local.lret)
+	f.Intrinsic.Control.If(v.Local.lret,=,6)
+		f.ODBC.Connection!con.openconnection(v.Ambient.PDSN,v.Ambient.PUser,v.Ambient.PPass)
+		v.Local.squoteno.Declare(string)
+		v.Local.squoteno.Set(v.Passed.000003)
+		f.Intrinsic.String.LPad(v.Local.squoteno,"0",7,v.Local.squoteno)
+		V.Local.lMaxCount.Declare(long)
+		v.Local.sparentrouter.Declare(string)
+		v.Local.slongdesc.Declare(string)
+		v.Local.sFormCaption.Declare(string)
+		v.Local.lCount.Declare(long,1)
+		v.Local.ssql.Declare(string)
+		'Get max count number
+		v.Local.ssql.Set("SELECT COUNT(QUOTE_NO) FROM V_QUOTE_LINES WHERE QUOTE_NO='{0}'")
+		f.Intrinsic.String.Build(v.Local.ssql,v.Local.squoteNo,v.Local.ssql)
+		f.ODBC.Connection!con.executeandreturn(v.Local.ssql,v.Local.lMaxCount)
+		'Show Form
+		gui.frmParts..Show
+		'Get all Rows
+		v.Local.ssql.Set("SELECT QUOTE_NO,RECORD_NO,PART, DESCRIPTION, UM_QUOTE, PRICE, PRODUCT_LINE FROM V_QUOTE_LINES WHERE QUOTE_NO='{0}'")
+		f.Intrinsic.String.Build(v.Local.ssql,v.Local.squoteno,v.Local.ssql)
+		F.ODBC.Connection!con.OPENRECORDSETRW("rs",v.local.ssql)
+		f.Intrinsic.Control.DoUntil(v.ODBC.con!rs.EOF,=,true)
+			f.Intrinsic.String.Concat("Creating Part ",v.Local.lCount," of ",v.Local.lMaxCount,v.Local.sFormCaption)
+			gui.frmParts.lblStatus.Caption(v.Local.sFormCaption)
+			
+			'CREATE THE PART AND SET PARENT ROUTER IN INFO 1 FIELD
+			F.Global.Inventory.CreatePart(V.ODBC.con!rs.FieldVal!PART,V.ODBC.con!rs.FieldVal!UM_QUOTE,V.ODBC.con!rs.FieldVal!DESCRIPTION,"",V.ODBC.con!rs.FieldVal!PRODUCT_LINE,"F","","",V.ODBC.con!rs.FieldVal!PRICE,"NOMAINT ")
+			f.Intrinsic.String.Left(v.ODBC.con!rs.FieldVal!PART,10,v.Local.sparentrouter)
+			v.Local.ssql.Set("UPDATE INVENTORY_MST2 SET TEXT_INFO1='{0}' WHERE PART='{1}'")
+			f.Intrinsic.String.Build(v.Local.ssql,v.Local.sparentrouter.Trim,v.ODBC.con!rs.FieldValTrim!PART,v.Local.ssql)
+			f.ODBC.Connection!con.execute(v.Local.ssql)
+			
+			'GET THE LONG DESCRIPTION
+			v.Local.ssql.Set("SELECT TEXT FROM QUOTE_LN_TEXT WHERE QUOTE_NUMBER='{0}' AND QUOTE_LINE='{1}'")
+			F.Intrinsic.String.Build(v.Local.ssql,v.ODBC.con!rs.FieldVal!QUOTE_NO,V.ODBC.con!rs.FieldVal!RECORD_NO,v.Local.ssql)
+			f.ODBC.Connection!con.executeandreturn(v.Local.ssql,v.Local.sLongDesc)
+			
+			f.Intrinsic.Control.Try
+				'INSERT THE LONG DESCRIPTION
+				V.Local.ssql.Set("INSERT INTO INV_EXTRA_TEXT (PART,TEXT) VALUES('{0}','{1}')")
+				F.Intrinsic.String.Build(v.Local.ssql,v.ODBC.con!rs.FieldVal!PART,v.Local.sLongDesc,v.Local.ssql)
+				F.ODBC.Connection!con.execute(v.Local.ssql)
+			f.Intrinsic.Control.Catch
+			f.Intrinsic.Control.EndTry
+			f.Intrinsic.Math.Add(v.Local.lCount,1,v.Local.lCount)
+			
+			f.ODBC.con!rs.MoveNext
+		f.Intrinsic.Control.Loop
+		gui.frmParts..Visible(false)
+		f.Intrinsic.UI.Msgbox("Part Number Creation Complete")
+		f.ODBC.Connection!con.Close
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
